@@ -1,0 +1,892 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>图像处理系统</title>
+    <link rel="stylesheet" href="static/css/cropper.min.css">
+    <script src="static/js/cropper.min.js"></script>
+    <style>
+        #crop-container {
+            display: none;
+            text-align: center;
+        }
+        #crop-image {
+            max-width: 100%;
+        }
+        .progress-bar {
+            border: 1px solid #ccc;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        #progress-fill {
+            transition: width 0.3s ease-in-out;
+        }
+        #progress-text {
+            text-align: center;
+            margin-top: 10px;
+            color: #666;
+        }
+        #superglue-params {
+            margin: 15px 0;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        #second-image-preview {
+            margin-top: 5px;
+            color: #666;
+            font-size: 0.9em;
+        }
+        .param-group {
+            margin: 15px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        #superglue-params label {
+            display: block;
+            margin-bottom: 10px;
+            font-weight: bold;
+        }
+        #superglue-params input[type="file"] {
+            display: block;
+            margin: 10px 0;
+        }
+        .param-group label {
+            display: block;
+            margin: 10px 0 5px;
+            font-weight: bold;
+        }
+        .param-group select {
+            margin: 10px 0;
+            padding: 5px;
+            width: 200px;
+        }
+        .param-group input[type="file"] {
+            margin: 5px 0;
+            padding: 5px;
+        }
+        .preview-text {
+            margin-top: 5px;
+            padding: 5px;
+            color: #666;
+            font-size: 0.9em;
+        }
+        
+        /* 添加全局样式 */
+        body {
+            font-family: 'Microsoft YaHei', sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+            color: #333;
+        }
+
+        h1 {
+            text-align: center;
+            color: #2c3e50;
+            margin-bottom: 30px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #3498db;
+        }
+
+        /* 美化表单元素 */
+        select, input[type="file"], input[type="number"], button {
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            margin: 5px 0;
+            font-size: 14px;
+            transition: all 0.3s ease;
+        }
+
+        select:hover, input[type="file"]:hover {
+            border-color: #3498db;
+        }
+
+        select {
+            background-color: white;
+            width: 100%;
+            max-width: 300px;
+        }
+
+        button {
+            background-color: #3498db;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        button:hover {
+            background-color: #2980b9;
+            transform: translateY(-1px);
+        }
+
+        /* 美化参数组容器 */
+        .param-group {
+            background-color: white;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            margin: 20px 0;
+            padding: 20px;
+            border-radius: 8px;
+        }
+
+        /* 美化进度条 */
+        .progress-bar {
+            background-color: #ecf0f1;
+            border-radius: 20px;
+            padding: 3px;
+            margin: 15px 0;
+        }
+
+        #progress-fill {
+            background: linear-gradient(90deg, #3498db, #2ecc71);
+            border-radius: 20px;
+            height: 20px;
+        }
+
+        /* 美化结果展示区域 */
+        h2 {
+            color: #2c3e50;
+            margin: 30px 0 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #eee;
+        }
+
+        img {
+            border-radius: 8px;
+            box-shadow: 0 3px 10px rgba(0,0,0,0.1);
+            margin: 10px 0;
+            max-width: 100%;
+            height: auto;
+        }
+
+        /* 响应式布局 */
+        @media (max-width: 768px) {
+            body {
+                padding: 10px;
+            }
+
+            select, input[type="file"] {
+                width: 100%;
+            }
+        }
+
+        /* 美化标签 */
+        label {
+            display: block;
+            margin: 10px 0 5px;
+            color: #2c3e50;
+            font-weight: bold;
+        }
+
+        /* 美化预览文本 */
+        .preview-text {
+            color: #7f8c8d;
+            font-size: 0.9em;
+            margin: 5px 0;
+            padding: 5px;
+            background-color: #f9f9f9;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <h1>图像处理系统</h1>
+    <form method="POST" enctype="multipart/form-data" action="/" id="image-form">
+        {% if uploaded_file %}
+            <p>当前文件：{{ uploaded_file.split('/')[-1] }}</p>
+        {% else %}
+            <input type="file" name="image" required><br><br>
+        {% endif %}
+        
+        <!-- 上传秘密图像 -->
+        <label for="secret_image">上传秘密图像（仅用于隐藏操作）：</label>
+        <input type="file" name="secret_image"><br><br>
+    
+        <select name="operation" id="operation-select">
+            <option value="read">显示图像</option>
+            <option value="grayscale">灰度图</option>
+            <option value="binary">二值图</option>
+            <option value="crop">图像裁剪</option>
+            <option value="hide">图像隐藏</option>
+            <option value="log">对数变换</option>
+            <option value="exp">指数变换</option>
+            <option value="linear">线性拉伸</option>
+            <option value="hist_eq">直方图均衡化</option>
+            <option value="smooth">图像平滑（高斯滤波）</option>
+            <option value="roberts">Robert算子锐化</option>
+            <option value="sobel">Sobel算子锐化</option>
+            <option value="laplacian">拉普拉斯算子锐化</option>
+            <option value="prewitt">Prewitt算子锐化</option>
+            <option value="highpass">高通滤波器锐化</option>
+            <option value="sequence_filter">顺序性filter</option>
+            <option value="beauty">AI人像美颜</option>
+            <option value="style_transfer">艺术风格迁移</option>
+            <option value="fft">FFT频域分析</option>
+            <option value="lowpass">低通滤波</option>
+            <option value="highpass">高通滤波</option>
+            <option value="otsu">Otsu阈值分割</option>
+            <option value="canny">Canny边缘检测</option>
+            <option value="maskrcnn">Mask R-CNN实例分割</option>
+            <option value="unet">U-Net语义分割</option>
+            <option value="sift_detect">SIFT特征点检测</option>
+            <option value="orb_detect">ORB特征点检测</option>
+            <option value="image_stitch">图像拼接</option>
+            <option value="image_fusion">图像融合</option>
+            <option value="multiband_fusion">多波段融合</option>
+            <option value="superglue_match">SuperGlue特征匹配</option>
+            <option value="dehaze">暗通道先验去雾</option>
+            <option value="cyclegan_dehaze">CycleGAN</option>
+            <option value="deblurgan">DeblurGAN-v2去模糊</option>
+            <option value="deblur">去模糊</option>
+            <option value="restore">老照片修复</option>
+        </select>
+
+        <!-- 将所有参数div放在一个容器中 -->
+        <div id="params-container">
+            <!-- SuperGlue参数 -->
+            <div id="superglue-params" style="display: none;" class="param-group">
+                <div style="margin: 15px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px;">
+                    <label for="superglue_second_image">选择第二张图片（必选）：</label>
+                    <input type="file" name="second_image" id="superglue_second_image" accept="image/*">
+                    <div id="second-image-preview"></div>
+                </div>
+            </div>
+
+            <!-- 图像拼接参数 -->
+            <div id="stitch-params" style="display: none;" class="param-group">
+                <div style="margin: 15px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px;">
+                    <label for="stitch_second_image">选择第二张图片（必选）：</label>
+                    <input type="file" name="s_second_image" id="stitch_second_image" accept="image/*">
+                    <div id="stitch-preview" class="preview-text"></div>
+                    
+                    <label for="stitch_method">选择特征点检测方法：</label>
+                    <select name="stitch_method" id="stitch_method">
+                        <option value="sift">SIFT</option>
+                        <option value="orb">ORB</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- 图像融合参数 -->
+            <div id="fusion-params" style="display: none;" class="param-group">
+                <div style="margin: 15px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px;">
+                    <label for="fusion_image">选择要融合的图片（必选）：</label>
+                    <input type="file" name="fusion_image" id="fusion_image" accept="image/*">
+                    <div id="fusion-preview"></div>
+                    
+                    <label for="fusion_method">选择融合方法：</label>
+                    <select name="fusion_method" id="fusion_method">
+                        <option value="wavelet">小波变换融合</option>
+                        <option value="average">均值融合</option>
+                        <option value="guided">引导滤波融合</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- 多波段融合参数 -->
+            <div id="multiband-params" style="display: none;" class="param-group">
+                <div style="margin: 15px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px;">
+                    <label for="band1">选择波段1（可见光）：</label>
+                    <input type="file" name="band1" id="band1" accept="image/*">
+                    <div id="band1-preview"></div>
+                    
+                    <label for="band2">选择波段2（红外/其他）：</label>
+                    <input type="file" name="band2" id="band2" accept="image/*">
+                    <div id="band2-preview"></div>
+                    
+                    <label for="fusion_type">选择融合方法：</label>
+                    <select name="fusion_type" id="fusion_type">
+                        <option value="wavelet">小波变换融合</option>
+                        <option value="guided">引导滤波融合</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div id="smooth-params" style="display: none;">
+                <label for="kernel_size">高斯核大小（奇数）：</label>
+                <input type="number" name="kernel_size" id="kernel_size" min="3" step="2" value="3">
+                <button type="button" id="confirm-kernel-size">确定核大小</button>
+            </div>
+            <div id="filter-params" style="display: none;">
+                <label for="filter_kernel_size">滤波核大小（奇数）：</label>
+                <input type="number" name="filter_kernel_size" id="filter_kernel_size" min="3" step="2" value="3">
+                <button type="button" id="confirm-filter-kernel-size">确定核大小</button>
+            </div>
+            <div id="hist-eq-params" style="display: none;">
+                <label for="hist_method">选择均衡化方法：</label>
+                <select name="hist_method" id="hist_method">
+                    <option value="global">全局均衡化</option>
+                    <option value="local">局部均衡化 (CLAHE)</option>
+                </select>
+            </div>
+            <div id="style-transfer-params" style="display: none;">
+                <label for="style_type">选择艺术风格：</label>
+                <select name="style_type" id="style_type">
+                    <option value="starry_night">星空之夜</option>
+                    <option value="mosaic">马赛克</option>
+                    <option value="udnie">乌德尼风格</option>
+                    <option value="rain_princess">雨公主风格</option>
+                </select>
+                <div id="style-transfer-loading" style="display: none; margin-top: 10px;">
+                    <p>正在处理中，请稍候...这可能需要几分钟时间</p>
+                    <p id="style-transfer-progress"></p>
+                </div>
+            </div>
+            <div id="lowpass-params" style="display: none;">
+                <label for="cutoff">截止频率：</label>
+                <input type="number" name="cutoff" id="cutoff" min="1" value="30">
+            </div>
+            <div id="highpass-params" style="display: none;">
+                <label for="cutoff">截止频率：</label>
+                <input type="number" name="cutoff" id="cutoff" min="1" value="30">
+            </div>
+            <div id="canny-params" style="display: none;">
+                <label for="low_threshold">低阈值：</label>
+                <input type="number" name="low_threshold" id="low_threshold" min="0" max="255" value="100">
+                
+                <label for="high_threshold">高阈值：</label>
+                <input type="number" name="high_threshold" id="high_threshold" min="0" max="255" value="200">
+                
+                <label for="sigma">高斯模糊系数：</label>
+                <input type="number" name="sigma" id="sigma" min="0.1" step="0.1" value="1.0">
+            </div>
+            <div id="maskrcnn-params" style="display: none;">
+                <label for="confidence">置信度阈值：</label>
+                <input type="range" name="confidence" id="confidence" 
+                        min="0.1" max="0.9" step="0.1" value="0.5"
+                        oninput="updateConfidenceValue(this.value)">
+                <span id="confidence_value">0.5</span>
+            </div>
+            <div id="deblur-params" style="display: none;">
+                <label for="deblur_method">选择去模糊方法：</label>
+                <select name="deblur_method" id="deblur_method">
+                    <option value="wiener">维纳滤波</option>
+                    <option value="blind">盲卷积</option>
+                    <option value="deblurgan">DeblurGAN-v2（深度学习）</option>
+                </select>
+                <div id="deblur-progress" style="display: none;">
+                    <p>正在进行深度学习去模糊处理，请稍候...</p>
+                    <div class="progress-bar">
+                        <div class="progress-fill"></div>
+                    </div>
+                </div>
+            </div>
+            <div id="restore-params" style="display: none;">
+                <label for="restore_method">选择修复方法：</label>
+                <select name="restore_method" id="restore_method">
+                    <option value="inpaint">邻域填充</option>
+                    <option value="histogram_matching">直方图匹配</option>
+                    <option value="deep_learning">深度学习修复</option>
+                </select>
+                <div id="reference-image-container" style="display: none;">
+                    <label for="reference_image">上传参考图片（用于直方图匹配）：</label>
+                    <input type="file" name="reference_image" id="reference_image">
+                    <div id="reference-preview" class="preview-text"></div>
+                </div>
+                <div id="restore-progress" style="display: none;">
+                    <p>正在进行深度学习修复，请稍候...</p>
+                    <div class="progress-bar">
+                        <div class="progress-fill"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <button type="submit" id="submit-btn">处理</button>
+    </form>
+
+    <!-- 在表单后面添加进度显示区域 -->
+    <div id="beauty-progress" style="display: none; margin: 20px 0;">
+        <h3>处理进度</h3>
+        <div class="progress-container">
+            <div class="progress-bar" style="width: 100%; height: 20px; background-color: #f0f0f0; border-radius: 10px; overflow: hidden;">
+                <div id="progress-fill" style="width: 0%; height: 100%; background-color: #4CAF50; transition: width 0.3s;"></div>
+            </div>
+            <p id="progress-text" style="margin-top: 10px; text-align: center;">准备处理...</p>
+            <p id="progress-detail" style="margin-top: 5px; text-align: center; color: #666; font-size: 0.9em;"></p>
+        </div>
+    </div>
+
+    {% if uploaded_file %}
+        <form method="POST" action="/reset">
+            <button type="submit">重新选择文件</button>
+        </form>
+    {% endif %}
+
+    {% if processed_image and operation == 'hist_eq' %}
+        <h2>原始图像：</h2>
+        <img src="{{ original_image }}" width="300">
+        <h2>直方图均衡化后：</h2>
+        <img src="{{ processed_image }}" width="300">
+    {% elif processed_image and operation == 'hide' %}
+        <h2>隐藏图像结果：</h2>
+        <img src="{{ processed_image }}" width="300">
+    {% elif processed_image and operation == 'smooth' %}
+        <h2>{{ kernel_size }}×{{ kernel_size }} 高斯核处理结果：</h2>
+        <img src="{{ processed_image }}" width="300">
+    
+    {% elif processed_images and operation == 'sequence_filter' %}
+        <h2>滤波处理结果：</h2>
+        <div>
+            <h3>均值滤波：</h3>
+            <img src="{{ processed_images['mean'] }}" width="300">
+        </div>
+        <div>
+            <h3>中值滤波：</h3>
+            <img src="{{ processed_images['median'] }}" width="300">
+        </div>
+        <div>
+            <h3>最大值滤波：</h3>
+            <img src="{{ processed_images['max'] }}" width="300">
+        </div>
+        <div>
+            <h3>最小值滤波：</h3>
+            <img src="{{ processed_images['min'] }}" width="300">
+        </div>
+    {% elif processed_image %}
+        <h2>处理结果：</h2>
+        <img src="{{ processed_image }}" width="300">
+    {% elif operation == 'lowpass' %}
+        <h2>低通滤波处理结果（截止频率：{{ cutoff }}）：</h2>
+        <div>
+            <h3>原始图像：</h3>
+            <img src="{{ url_for('static', filename=uploaded_file.split('static/')[-1].replace('\\', '/')) }}" width="300">
+        </div>
+        <div>
+            <h3>理想低通滤波结果：</h3>
+            <img src="{{ processed_images['ideal'] }}" width="300">
+        </div>
+        <div>
+            <h3>巴特沃斯低通滤波结果：</h3>
+            <img src="{{ processed_images['butterworth'] }}" width="300">
+        </div>
+    {% elif operation == 'highpass' %}
+        <h2>高通滤波处理结果（截止频率：{{ cutoff }}）：</h2>
+        <div>
+            <h3>原始图像：</h3>
+            <img src="{{ url_for('static', filename=uploaded_file.split('static/')[-1].replace('\\', '/')) }}" width="300">
+        </div>
+        <div>
+            <h3>理想高通滤波结果：</h3>
+            <img src="{{ processed_images['ideal'] }}" width="300">
+        </div>
+        <div>
+            <h3>高斯高通滤波结果：</h3>
+            <img src="{{ processed_images['gaussian'] }}" width="300">
+        </div>
+    {% elif operation == 'canny' and processed_images %}
+        <h2>Canny边缘检测结果：</h2>
+        <div style="display: flex; flex-wrap: wrap; gap: 20px;">
+            <div>
+                <h3>原始图像：</h3>
+                <img src="{{ url_for('static', filename=uploaded_file.split('static/')[-1].replace('\\', '/')) }}" width="300">
+            </div>
+            <div>
+                <h3>原始Canny算法结果：</h3>
+                <img src="{{ processed_images['original'] }}" width="300">
+            </div>
+            <div>
+                <h3>改进Canny算法结果：</h3>
+                <img src="{{ processed_images['improved'] }}" width="300">
+            </div>
+        </div>
+        <div style="margin-top: 20px;">
+            <h3>使用的参数：</h3>
+            <ul>
+                <li>低阈值：{{ low_threshold }}</li>
+                <li>高阈值：{{ high_threshold }}</li>
+                <li>高斯模糊系数：{{ sigma }}</li>
+            </ul>
+        </div>
+    {% elif operation == 'multiband_fusion' and processed_image %}
+        <h2>多波段融合结果：</h2>
+        <div style="display: flex; flex-wrap: wrap; gap: 20px;">
+            <div>
+                <h3>原始图像：</h3>
+                <img src="{{ url_for('static', filename=uploaded_file.split('static/')[-1]) }}" width="300">
+            </div>
+            <div>
+                <h3>彩色显示效果：</h3>
+                <img src="{{ colored_image }}" width="300">
+            </div>
+        </div>
+    {% elif operation == 'superglue_match' and processed_image %}
+        <h2>SuperGlue特征匹配结果：</h2>
+        <div style="display: flex; flex-direction: column; align-items: center; gap: 20px;">
+            <div>
+                <h3>原始图像：</h3>
+                <img src="{{ url_for('static', filename=uploaded_file.split('static/')[-1].replace('\\', '/')) }}" width="300">
+            </div>
+            <div>
+                <h3>匹配结果：</h3>
+                <img src="{{ processed_image }}" width="800">
+            </div>
+            <div>
+                <p style="color: #666; font-size: 0.9em;">注：图中连线表示两张图像之间的特征点匹配关系</p>
+            </div>
+        </div>
+    {% elif operation == 'image_stitch' and processed_image %}
+        <h2>图像拼接结果：</h2>
+        <div style="display: flex; flex-direction: column; align-items: center; gap: 20px;">
+            <div style="display: flex; flex-wrap: wrap; gap: 20px;">
+                <div>
+                    <h3>原始图像：</h3>
+                    <img src="{{ url_for('static', filename=uploaded_file.split('static/')[-1].replace('\\', '/')) }}" width="300">
+                </div>
+                <div>
+                    <h3>拼接结果：</h3>
+                    <img src="{{ processed_image }}" width="800">
+                </div>
+            </div>
+            <div>
+                <p style="color: #666; font-size: 0.9em;">使用的特征点检测方法: {{ stitch_method }}</p>
+            </div>
+        </div>
+    {% endif %}
+
+    {% if uploaded_file and operation == 'crop' %}
+        <div id="crop-container">
+            <h2>裁剪图像</h2>
+            <img id="crop-image" src="{{ url_for('static', filename=uploaded_file.split('static/')[-1].replace('\\', '/')) }}">            <br>
+            <button id="crop-save">保存裁剪</button>
+        </div>
+    {% endif %}
+
+    {% if fft_results %}
+        <h2>FFT频域分析结果：</h2>
+        <div>
+            <h3>频谱图：</h3>
+            <img src="{{ fft_results['spectrum'] }}" width="300">
+        </div>
+        <div>
+            <h3>低频重建：</h3>
+            <img src="{{ fft_results['low_freq'] }}" width="300">
+        </div>
+        <div>
+            <h3>高频重建：</h3>
+            <img src="{{ fft_results['high_freq'] }}" width="300">
+        </div>
+    {% endif %}
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const operationSelect = document.getElementById('operation-select');
+            const cropContainer = document.getElementById('crop-container');
+            const cropImage = document.getElementById('crop-image');
+            const cropSaveButton = document.getElementById('crop-save');
+            const smoothParams = document.getElementById('smooth-params');
+            const kernelSizeInput = document.getElementById('kernel_size');
+            const confirmKernelSizeButton = document.getElementById('confirm-kernel-size');
+            const filterParams = document.getElementById('filter-params');
+            const filterKernelSizeInput = document.getElementById('filter_kernel_size');
+            const confirmFilterKernelSizeButton = document.getElementById('confirm-filter-kernel-size');
+            const histEqParams = document.getElementById('hist-eq-params');
+            const styleTransferParams = document.getElementById('style-transfer-params');
+            const styleTransferLoading = document.getElementById('style-transfer-loading');
+            const styleTransferProgress = document.getElementById('style-transfer-progress');
+            const beautyProgress = document.getElementById('beauty-progress');
+            const progressFill = document.getElementById('progress-fill');
+            const progressText = document.getElementById('progress-text');
+            const progressDetail = document.getElementById('progress-detail');
+            const cannyParams = document.getElementById('canny-params');
+            const maskrcnnParams = document.getElementById('maskrcnn-params');
+            const paramsContainer = document.getElementById('params-container');
+            const imageForm = document.getElementById('image-form');
+            const submitBtn = document.getElementById('submit-btn');
+            const deblurParams = document.getElementById('deblur-params');
+            const restoreParams = document.getElementById('restore-params');
+
+            operationSelect.addEventListener('change', () => {
+                if (operationSelect.value === 'restore') {
+                    restoreParams.style.display = 'block';
+                } else {
+                    restoreParams.style.display = 'none';
+                }
+            });
+
+            operationSelect.addEventListener('change', () => {
+                if (operationSelect.value === 'deblur') {
+                    deblurParams.style.display = 'block';
+                } else {
+                    deblurParams.style.display = 'none';
+                }
+            });
+    
+            let cropper;
+            let progressInterval;
+            
+            // 隐藏所有参数组
+            function hideAllParams() {
+                const paramGroups = paramsContainer.getElementsByClassName('param-group');
+                for (let group of paramGroups) {
+                    group.style.display = 'none';
+                }
+            }
+
+            // 操作选择变化时的处理
+            operationSelect.addEventListener('change', () => {
+                hideAllParams();
+                
+                if (operationSelect.value === 'hist_eq') {
+                    histEqParams.style.display = 'block';
+                }
+
+                if (operationSelect.value === 'style_transfer') {
+                    styleTransferParams.style.display = 'block';
+                    styleTransferLoading.style.display = 'none';
+                }
+
+                if (operationSelect.value === 'canny') {
+                    cannyParams.style.display = 'block';
+                }
+
+                if (operationSelect.value === 'maskrcnn') {
+                    maskrcnnParams.style.display = 'block';
+                }
+
+                if (operationSelect.value === 'image_stitch') {
+                    const stitchParams = document.getElementById('stitch-params');
+                    const secondImageInput = document.getElementById('stitch_second_image');
+                    
+                    stitchParams.style.display = 'block';
+                    secondImageInput.required = true;
+                    
+                    // 清除预览
+                    document.getElementById('stitch-preview').textContent = '';
+                }
+                
+                if (operationSelect.value === 'image_fusion') {
+                    document.getElementById('fusion-params').style.display = 'block';
+                }
+
+                if (operationSelect.value === 'multiband_fusion') {
+                    document.getElementById('multiband-params').style.display = 'block';
+                }
+
+                if (operationSelect.value === 'superglue_match') {
+                    const superglueParams = document.getElementById('superglue-params');
+                    const secondImageInput = document.getElementById('superglue_second_image');
+                    
+                    superglueParams.style.display = 'block';
+                    secondImageInput.required = true;
+                    
+                    // 清除预览
+                    document.getElementById('second-image-preview').textContent = '';
+                }
+            });
+
+            operationSelect.addEventListener('change', () => {
+                if (['sequence_filter'].includes(operationSelect.value)) {
+                    filterParams.style.display = 'block';
+                } else {
+                    filterParams.style.display = 'none';
+                }
+            });
+    
+            confirmFilterKernelSizeButton.addEventListener('click', () => {
+                const kernelSize = filterKernelSizeInput.value;
+                if (kernelSize % 2 === 0) {
+                    alert("核大小必须为奇数，请重新输入！");
+                } else {
+                    alert(`核大小已设置为：${kernelSize}`);
+                }
+            });
+            operationSelect.addEventListener('change', () => {
+                if (operationSelect.value === 'smooth') {
+                    smoothParams.style.display = 'block';
+                } else {
+                    smoothParams.style.display = 'none';
+                }
+            });
+    
+            confirmKernelSizeButton.addEventListener('click', () => {
+                const kernelSize = kernelSizeInput.value;
+                if (kernelSize % 2 === 0) {
+                    alert("核大小必须为奇数，请重新输入！");
+                } else {
+                    alert(`核大小已设置为：${kernelSize}`);
+                }
+            });
+            
+            // 初始化裁剪功能
+            if (operationSelect && cropImage && cropSaveButton) {
+                cropContainer.style.display = 'block';
+
+                // 等待图像加载完成后初始化裁剪器
+                cropImage.addEventListener('load', () => {
+                    console.log(`Image dimensions: ${cropImage.naturalWidth}x${cropImage.naturalHeight}`);
+                    if (cropImage.naturalWidth === 0 || cropImage.naturalHeight === 0) {
+                        alert('图像加载失败，请检查文件路径！');
+                        return;
+                    }
+
+                    cropper = new Cropper(cropImage, {
+                        aspectRatio: 0, // 自由裁剪
+                        viewMode: 1
+                    });
+                    console.log('裁剪器已初始化');
+                });
+
+                // 保存裁剪图像
+                cropSaveButton.addEventListener('click', () => {
+                    if (!cropper) {
+                        alert('裁剪器未初始化，请刷新页面重试！');
+                        return;
+                    }
+
+                    const croppedCanvas = cropper.getCroppedCanvas();
+                    if (!croppedCanvas) {
+                        alert('裁剪失败，请重试！');
+                        return;
+                    }
+
+                    croppedCanvas.toBlob(blob => {
+                        if (!blob) {
+                            alert('生成裁剪图像失败！');
+                            return;
+                        }
+
+                        const formData = new FormData();
+                        formData.append('cropped_image', blob, 'cropped_image.png');
+
+                        fetch('/crop_save', {
+                            method: 'POST',
+                            body: formData
+                        }).then(response => {
+                            if (response.ok) {
+                                alert('裁剪图像已保存！');
+                                window.location.reload();
+                            } else {
+                                response.json().then(data => {
+                                    alert(data.error || '保存失败，请重试！');
+                                });
+                            }
+                        }).catch(error => {
+                            console.error('请求失败：', error);
+                            alert('请求失败，请检查网络连接！');
+                        });
+                    });
+                });
+            } else {
+                console.error('裁剪功能初始化失败，检查 HTML 元素是否正确加载');
+            }
+
+            // 添加风格迁移处理提示
+            operationSelect.addEventListener('change', () => {
+                if (operationSelect.value === 'style_transfer') {
+                    styleTransferParams.style.display = 'block';
+                    styleTransferLoading.style.display = 'none';
+                } else {
+                    styleTransferParams.style.display = 'none';
+                    styleTransferLoading.style.display = 'none';
+                }
+            });
+            
+            // 提交表单时显示加载提示
+            document.querySelector('form').addEventListener('submit', (e) => {
+                if (operationSelect.value === 'style_transfer') {
+                    styleTransferLoading.style.display = 'block';
+                    styleTransferProgress.textContent = '正在初始化模型...';
+                }
+            });
+
+            // 监听表单提交
+            document.querySelector('form').addEventListener('submit', (e) => {
+                if (operationSelect.value === 'beauty') {
+                    beautyProgress.style.display = 'block';
+                    progressFill.style.width = '0%';
+                    progressText.textContent = '准备处理...';
+                    progressDetail.textContent = '';
+                    
+                    progressInterval = setInterval(updateProgress, 500);
+                }
+            });
+
+            // 文件选择变化时的处理
+            document.getElementById('superglue_second_image').addEventListener('change', (e) => {
+                const file = e.target.files[0];
+                const preview = document.getElementById('second-image-preview');
+                
+                if (file) {
+                    preview.textContent = `已选择: ${file.name}`;
+                    preview.style.color = '#4CAF50';
+                } else {
+                    preview.textContent = '';
+                }
+            });
+
+            // 文件选择预览
+            document.getElementById('stitch_second_image').addEventListener('change', (e) => {
+                const file = e.target.files[0];
+                const preview = document.getElementById('stitch-preview');
+                
+                if (file) {
+                    preview.textContent = `已选择: ${file.name}`;
+                    preview.style.color = '#4CAF50';
+                } else {
+                    preview.textContent = '';
+                }
+            });
+
+            // 表单提交验证
+            imageForm.addEventListener('submit', (e) => {
+                if (operationSelect.value === 'image_stitch') {
+                    const secondImage = document.getElementById('stitch_second_image');
+                    if (!secondImage.files || !secondImage.files[0]) {
+                        e.preventDefault();
+                        alert('请选择第二张图片进行拼接！');
+                        return false;
+                    }
+                    console.log('提交拼接表单，第二张图片:', secondImage.files[0].name);
+                }
+            });
+
+            // 在现有的script标签中添加
+            document.getElementById('deblur_method').addEventListener('change', function() {
+                const progressDiv = document.getElementById('deblur-progress');
+                if (this.value === 'deblurgan') {
+                    progressDiv.style.display = 'block';
+                } else {
+                    progressDiv.style.display = 'none';
+                }
+            });
+        });
+
+        function updateProgress() {
+            fetch('/progress')
+                .then(response => response.json())
+                .then(data => {
+                    progressFill.style.width = `${data.progress}%`;
+                    progressText.textContent = `${data.stage}`;
+                    progressDetail.textContent = `进度: ${data.progress}%`;
+                    
+                    if (data.progress >= 100) {
+                        clearInterval(progressInterval);
+                        setTimeout(() => {
+                            beautyProgress.style.display = 'none';
+                        }, 2000);
+                    }
+                })
+                .catch(error => {
+                    console.error('进度查询失败：', error);
+                    progressDetail.textContent = '进度查询失败，请刷新页面重试';
+                });
+        }
+
+        function updateConfidenceValue(value) {
+            document.getElementById('confidence_value').textContent = value;
+        }
+        document.getElementById('restore_method').addEventListener('change', function() {
+            const referenceContainer = document.getElementById('reference-image-container');
+            if (this.value === 'histogram_matching') {
+                referenceContainer.style.display = 'block';
+            } else {
+                referenceContainer.style.display = 'none';
+            }
+        });
+    </script>
+</body>
+</html>
